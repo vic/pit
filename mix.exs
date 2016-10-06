@@ -5,6 +5,8 @@ defmodule Pit.Mixfile do
     [app: :pit,
      version: "0.1.0",
      elixir: "~> 1.3",
+     description: description,
+     package: package,
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps()]
@@ -28,5 +30,18 @@ defmodule Pit.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     []
+  end
+
+  def description do
+    """
+    Syntax sugar for transforming values down a pipe.
+    """
+  end
+
+  defp package do
+    [files: ["lib", "mix.exs", "README*"],
+     maintainers: ["Victor Borja"],
+     licenses: ["Apache 2.0"],
+     links: %{"GitHub" => "https://github.com/vic/pit"}]
   end
 end

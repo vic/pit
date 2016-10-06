@@ -1,4 +1,4 @@
-# Pit
+# Down the pit
 
 The `pit` macro lets you pipe value transformations by pattern matching
 on data as it is passed down the pipe.
