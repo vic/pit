@@ -5,6 +5,7 @@ on data as it is passed down the pipe.
 
 The syntax for transforming values is `expression |> pit(value <- pattern)`.
 
+
 ```elixir
 
     iex> # The following will ensure there are no errors on
@@ -34,7 +35,7 @@ The syntax for transforming values is `expression |> pit(value <- pattern)`.
     ...> response
     ...>    |> pit(! {:error, _})
     ...>    |> pit(n <- {:ok, n})
-    ** (Pit.PipedValueMismatch) expected piped value not to match `{:error, _}`
+    ** (Pit.PipedValueMismatch) did not expect piped value to match `{:error, _}` but got `{:error, :not_found}`
 
 
     iex> # also, when a guard fails an error is raised
@@ -43,19 +44,29 @@ The syntax for transforming values is `expression |> pit(value <- pattern)`.
     ...> response
     ...>    |> pit({:ok, n} when n > 30)
     ...>    |> pit(n <- {:ok, n})
-    ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30`
+    ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30` but got `{:ok, 22}`
 
 
-    iex> # You can provide a fallback value for mismatch
+    iex> # You can provide a default value in case of mismatch
     iex> import Pit
     ...> response = {:error, :not_found}
     ...> response
-    ...>    |> pit({:ok, _}, else: {:ok, :default})
+    ...>    |> pit({:ok, _}, else_value: {:ok, :default})
     ...>    |> pit(n <- {:ok, n})
     :default
 
 
-```
+    iex> # Or you can pipe the mismatch value to other pipe
+    iex> # and get its value down a more interesting transformation flow.
+    iex> import Pit
+    ...> response = {:ok, "hello"}
+    ...> response
+    ...>   |> pit({:ok, n} when is_integer(n),
+    ...>        else: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, len} <- len))
+    ...>   |> pit(x * 2 <- {:ok, x})
+    10
+    
+```    
 
 ## Installation
 
@@ -65,7 +76,7 @@ The syntax for transforming values is `expression |> pit(value <- pattern)`.
 
     ```elixir
     def deps do
-      [{:pit, "~> 0.1.1"}]
+      [{:pit, "~> 0.1.2"}]
     end
     ```
 

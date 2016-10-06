@@ -5,7 +5,7 @@ defmodule Pit do
   end
 
 
-  @moduledoc ~S"""
+  @doc ~S"""
 
   The `pit` macro lets you pipe value transformations by pattern matching
   on data as it is passed down the pipe.
@@ -52,16 +52,26 @@ defmodule Pit do
     ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30` but got `{:ok, 22}`
 
 
-    iex> # You can provide a fallback value for mismatch
+    iex> # You can provide a default value in case of mismatch
     iex> import Pit
     ...> response = {:error, :not_found}
     ...> response
-    ...>    |> pit({:ok, _}, else: {:ok, :default})
+    ...>    |> pit({:ok, _}, else_value: {:ok, :default})
     ...>    |> pit(n <- {:ok, n})
     :default
 
-  """
 
+    iex> # Or you can pipe the mismatch value to other pipe
+    iex> # and get its value down a more interesting transformation flow.
+    iex> import Pit
+    ...> response = {:ok, "hello"}
+    ...> response
+    ...>   |> pit({:ok, n} when is_integer(n),
+    ...>        else: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, len} <- len))
+    ...>   |> pit(x * 2 <- {:ok, x})
+    10
+
+  """
   defmacro pit(pipe, expr, options \\ []) do
     hole = down_the_pit(expr, fallback(expr, options))
     quote do
@@ -69,9 +79,16 @@ defmodule Pit do
     end
   end
 
+
+  defp down_the_pit({:<-, _, [value, pattern = {v, _, l}]}, _fallback) when is_atom(v) and is_atom(l) do
+    quote do
+      fn unquote(pattern) -> unquote(value) end
+    end
+  end
+
   defp down_the_pit({:<-, _, [value, pattern]}, fallback) do
     quote do
-      fn (it) ->
+      fn it ->
         case it do
           unquote(pattern) -> unquote(value)
           _ -> it |> unquote(fallback)
@@ -82,7 +99,7 @@ defmodule Pit do
 
   defp down_the_pit({:!, _, [pattern]}, fallback) do
     quote do
-      fn (it) ->
+      fn it ->
         case it do
           unquote(pattern) -> it |> unquote(fallback)
           _ -> it
@@ -91,9 +108,15 @@ defmodule Pit do
     end
   end
 
+  defp down_the_pit({v, _, l}, _fallback) when is_atom(v) and is_atom(l) do
+    quote do
+      fn it -> it end
+    end
+  end
+
   defp down_the_pit(pattern, fallback) do
     quote do
-      fn (it) ->
+      fn it ->
         case it do
           unquote(pattern) -> it
           _ -> it |> unquote(fallback)
@@ -102,10 +125,10 @@ defmodule Pit do
     end
   end
 
-  defp fallback(_, [else_pipe: pipe]), do: pipe
-  defp fallback(_, [else: code]) do
+  defp fallback(_, [else: pipe]), do: pipe
+  defp fallback(_, [else_value: code]) do
     quote do
-      (fn (_) -> unquote(code) end).()
+      (fn _ -> unquote(code) end).()
     end
   end
   defp fallback({:<-, _, [_, pattern]}, _) do
@@ -120,7 +143,7 @@ defmodule Pit do
 
   defp mismatch({message, pattern}) do
     quote do
-      (fn (it) ->
+      (fn it ->
         raise PipedValueMismatch,
         message: "#{unquote(message)} `#{unquote(Macro.to_string(pattern))}` but got `#{inspect(it)}`",
         pattern: unquote(Macro.escape(pattern)),

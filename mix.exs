@@ -3,7 +3,7 @@ defmodule Pit.Mixfile do
 
   def project do
     [app: :pit,
-     version: "0.1.1",
+     version: "0.1.2",
      elixir: "~> 1.3",
      description: description,
      package: package,
@@ -36,7 +36,7 @@ defmodule Pit.Mixfile do
 
   def description do
     """
-    Syntax sugar for transforming values down a pipe.
+    Elixir macro for extracting or transforming values inside a pipe flow.
     """
   end
 
