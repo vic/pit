@@ -3,7 +3,7 @@
 The `pit` macro lets you pipe value transformations by pattern matching
 on data as it is passed down the pipe.
 
-The syntax for transforming values is `expression |> pit(value <- pattern)`.
+The syntax for transforming values is `value |> pit(expression <- pattern)`.
 
 
 ```elixir
