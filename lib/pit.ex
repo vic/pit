@@ -56,20 +56,32 @@ defmodule Pit do
       iex> import Pit
       ...> response = {:error, :not_found}
       ...> response
-      ...>    |> pit({:ok, _}, else_value: {:ok, :default})
+      ...>    |> pit({:ok, _}, else: {:ok, :default})
       ...>    |> pit(n <- {:ok, n})
       :default
 
 
-      iex> # Or you can pipe the mismatch value to other pipe
-      iex> # and get its value down a more interesting transformation flow.
+      iex> # Or you can pipe the mismatch value to other pipe using `else_pipe:` option
+      iex> # and get the value down a more interesting transformation flow.
       iex> import Pit
       ...> response = {:ok, "hello"}
       ...> response
       ...>   |> pit({:ok, n} when is_integer(n),
-      ...>        else: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, len} <- len))
-      ...>   |> pit(x * 2 <- {:ok, x})
+      ...>        do: {:ok, :was_integer, n},
+      ...>        else_pipe: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, :was_string, len} <- len))
+      ...>   |> pit(x * 2 <- {:ok, _, x})
       10
+
+
+      iex> # Both `do_pipe` and `else_pipe` if given the `:it` atom just pass the value down
+      iex> import Pit
+      ...> {:error, 22} |> pit({:ok, _}, else_pipe: :it)
+      {:error, 22}
+
+      iex> import Pit
+      ...> {:ok, 22} |> pit({:ok, _}, do_pipe: :it)
+      {:ok, 22}
+
 
   """
   defmacro pit(pipe, expr, options \\ []) do
@@ -78,8 +90,8 @@ defmodule Pit do
 
   def pit_pipe(piped, expr, options) do
     options = [
-      do: do_pipe(Keyword.take(options, [:do])),
-      else: else_pipe(expr, Keyword.take(options, [:else, :else_value]))
+      do: do_pipe(Keyword.take(options, [:do, :do_pipe])),
+      else: else_pipe(expr, Keyword.take(options, [:else, :else_pipe]))
     ]
     quote do
       unquote(piped) |> unquote(pit_fn(expr, options)).()
@@ -117,6 +129,12 @@ defmodule Pit do
     end
   end
 
+  defp pit_branches(it, pattern = {v, _, s}, [do: do_pipe, else: _else_pipe]) when is_atom(v) and is_atom(s) do
+    quote do
+      unquote(pattern) -> unquote(it) |> unquote(do_pipe)
+    end
+  end
+
   defp pit_branches(it, pattern, [do: do_pipe, else: else_pipe]) do
     quote do
       unquote(pattern) -> unquote(it) |> unquote(do_pipe)
@@ -124,26 +142,37 @@ defmodule Pit do
     end
   end
 
-  defp do_pipe(do: pipe), do: pipe
+  defp do_pipe(do_pipe: :it), do: do_pipe([])
+  defp do_pipe(do_pipe: pipe), do: pipe
+  defp do_pipe(do: expr) do
+    quote do
+      (fn _ -> unquote(expr) end).()
+    end
+  end
   defp do_pipe([]) do
     quote do
       (fn it -> it end).()
     end
   end
 
-  defp else_pipe(_expr, else: pipe), do: pipe
-  defp else_pipe(_expr, else_value: expr) do
+  defp else_pipe(_expr, else_pipe: :it) do
+    quote do
+      (fn it -> it end).()
+    end
+  end
+  defp else_pipe(_expr, else_pipe: pipe), do: pipe
+  defp else_pipe(_expr, else: expr) do
     quote do
       (fn _ -> unquote(expr) end).()
     end
   end
-  defp else_pipe({:<-, _, [_, pattern]}, _) do
+  defp else_pipe({:<-, _, [_, pattern]}, []) do
     mismatch({"expected piped value to match", pattern})
   end
-  defp else_pipe({:!, _, [pattern]}, _) do
+  defp else_pipe({:!, _, [pattern]}, []) do
     mismatch({"did not expect piped value to match", pattern})
   end
-  defp else_pipe(pattern, _) do
+  defp else_pipe(pattern, []) do
     mismatch({"expected piped value to match", pattern})
   end
 
