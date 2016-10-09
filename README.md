@@ -76,7 +76,7 @@ The syntax for transforming values is `value |> pit(expression <- pattern)`.
 
     ```elixir
     def deps do
-      [{:pit, "~> 0.1.2"}]
+      [{:pit, "~> 0.1.3"}]
     end
     ```
 
