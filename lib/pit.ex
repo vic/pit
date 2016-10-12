@@ -61,7 +61,7 @@ defmodule Pit do
       :default
 
 
-      iex> # Or you can pipe the mismatch value to other pipe using `else_pipe:` option
+      iex> # Or you can pipe the mismatch value to other pipe using `else:` option
       iex> # and get the value down a more interesting transformation flow.
       iex> import Pit
       ...> response = {:ok, "hello"}
@@ -73,7 +73,7 @@ defmodule Pit do
       10
 
 
-      iex> # Both `do_pipe` and `else_pipe` if given the `:it` atom just pass the value down
+      iex> # Both `do` and `else` if given the `:it` atom just pass the value down
       iex> import Pit
       ...> {:error, 22} |> pit({:ok, _}, else: :it)
       {:error, 22}
@@ -81,6 +81,15 @@ defmodule Pit do
       iex> import Pit
       ...> {:ok, 22} |> pit({:ok, _}, do: :it)
       {:ok, 22}
+
+
+      iex> # The do form can take a block using bound variables.
+      iex> import Pit
+      ...> {:ok, 22} |> (pit {:ok, n} do
+      ...>  x = n / 11
+      ...>  x * 2
+      ...> end)
+      4.0
 
 
   """
@@ -143,6 +152,11 @@ defmodule Pit do
   end
 
   defp do_pipe(do: :it), do: do_pipe([])
+  defp do_pipe(do: body = {:__block__, _, _}) do
+    quote do
+      (fn _ -> unquote(body) end).()
+    end
+  end
   defp do_pipe(do: pipe), do: pipe
   defp do_pipe(do_value: expr) do
     quote do
@@ -158,6 +172,11 @@ defmodule Pit do
   defp else_pipe(_expr, else: :it) do
     quote do
       (fn it -> it end).()
+    end
+  end
+  defp else_pipe(_expr, body = {:__block__, _, _}) do
+    quote do
+      (fn _ -> unquote(body) end).()
     end
   end
   defp else_pipe(_expr, else: pipe), do: pipe
