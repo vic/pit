@@ -1,5 +1,7 @@
 # Down the pit
 
+<a href="https://travis-ci.org/vic/pit"><img src="https://travis-ci.org/vic/pit.svg"></a>
+
 The `pit` macro lets you pipe value transformations by pattern matching
 on data as it is passed down the pipe.
 
