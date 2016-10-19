@@ -11,12 +11,11 @@
 
     ```elixir
     def deps do
-      [{:pit, "~> 1.0.0"}]
+      [{:pit, "~> 1.0.1"}]
     end
     ```
 
 ## Usage
-
 
 The `pit` macro lets you pipe value transformations by pattern matching
 on data as it is passed down the pipe.
@@ -100,39 +99,63 @@ iex> # You can provide a default value in case of mismatch
 iex> import Pit
 ...> response = {:error, :not_found}
 ...> response
-...>    |> pit({:ok, _}, else_value: {:ok, :default})
+...>    |> pit({:ok, _}, else: {:ok, :default})
 ...>    |> pit(n <- {:ok, n})
 :default
 
 
-iex> # Or you can pipe the mismatch value to other pipe using `else:` option
+iex> # Or you can pipe the mismatch value to other pipe using `else_pipe:` option
 iex> # and get the value down a more interesting transformation flow.
 iex> import Pit
 ...> response = {:ok, "hello"}
 ...> response
 ...>   |> pit({:ok, n} when is_integer(n),
-...>        do_value: {:ok, :was_integer, n},
-...>        else: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, :was_string, len} <- len))
+...>        do: {:ok, :was_integer, n},
+...>        else_pipe: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, :was_string, len} <- len))
 ...>   |> pit(x * 2 <- {:ok, _, x})
 10
 
 
-iex> # Both `do` and `else` if given the `:it` atom just pass the value down
+iex> # Both `do_pipe` and `else_pipe` if given the `:it` atom just pass the value down
 iex> import Pit
-...> {:error, 22} |> pit({:ok, _}, else: :it)
+...> {:error, 22} |> pit({:ok, _}, else_pipe: :it)
 {:error, 22}
 
 iex> import Pit
-...> {:ok, 22} |> pit({:ok, _}, do: :it)
+...> {:ok, 22} |> pit({:ok, _}, do_pipe: :it)
 {:ok, 22}
 
 
 iex> # The do form can take a block using bound variables.
 iex> import Pit
-...> {:ok, 22} |> (pit {:ok, n} do
-...>  x = n / 11
-...>  x * 2
-...> end)
+...> {:ok, 22}
+...> |> pit {:ok, n} do
+...>    x = n / 11
+...>    x * 2
+...> end
 4.0
+
+
+iex> # You can omit parens even with negated pattern
+iex> import Pit
+...> {:failure, :nop}
+...> |> pit not {:ok, _} do
+...>   "Noup"
+...> end
+...> |> pit {:ok, _} do
+...>   "Yeah"
+...> end
+"Noup"
+
+
+iex> # You can of course provide both do/else
+iex> import Pit
+...> {:error, :nop}
+...> |> pit {:ok, _} do
+...>   "Yeah"
+...> else
+...>   "Noup"
+...> end
+"Noup"
 
 ```

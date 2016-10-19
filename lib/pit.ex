@@ -86,41 +86,64 @@ defmodule Pit do
       iex> import Pit
       ...> response = {:error, :not_found}
       ...> response
-      ...>    |> pit({:ok, _}, else_value: {:ok, :default})
+      ...>    |> pit({:ok, _}, else: {:ok, :default})
       ...>    |> pit(n <- {:ok, n})
       :default
 
 
-      iex> # Or you can pipe the mismatch value to other pipe using `else:` option
+      iex> # Or you can pipe the mismatch value to other pipe using `else_pipe:` option
       iex> # and get the value down a more interesting transformation flow.
       iex> import Pit
       ...> response = {:ok, "hello"}
       ...> response
       ...>   |> pit({:ok, n} when is_integer(n),
-      ...>        do_value: {:ok, :was_integer, n},
-      ...>        else: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, :was_string, len} <- len))
+      ...>        do: {:ok, :was_integer, n},
+      ...>        else_pipe: pit(s <- {:ok, s} when is_binary(s)) |> String.length |> pit({:ok, :was_string, len} <- len))
       ...>   |> pit(x * 2 <- {:ok, _, x})
       10
 
 
-      iex> # Both `do` and `else` if given the `:it` atom just pass the value down
+      iex> # Both `do_pipe` and `else_pipe` if given the `:it` atom just pass the value down
       iex> import Pit
-      ...> {:error, 22} |> pit({:ok, _}, else: :it)
+      ...> {:error, 22} |> pit({:ok, _}, else_pipe: :it)
       {:error, 22}
 
       iex> import Pit
-      ...> {:ok, 22} |> pit({:ok, _}, do: :it)
+      ...> {:ok, 22} |> pit({:ok, _}, do_pipe: :it)
       {:ok, 22}
 
 
       iex> # The do form can take a block using bound variables.
       iex> import Pit
-      ...> {:ok, 22} |> (pit {:ok, n} do
-      ...>  x = n / 11
-      ...>  x * 2
-      ...> end)
+      ...> {:ok, 22}
+      ...> |> pit {:ok, n} do
+      ...>    x = n / 11
+      ...>    x * 2
+      ...> end
       4.0
 
+
+      iex> # You can omit parens even with negated pattern
+      iex> import Pit
+      ...> {:failure, :nop}
+      ...> |> pit not {:ok, _} do
+      ...>   "Noup"
+      ...> end
+      ...> |> pit {:ok, _} do
+      ...>   "Yeah"
+      ...> end
+      "Noup"
+
+
+      iex> # You can of course provide both do/else
+      iex> import Pit
+      ...> {:error, :nop}
+      ...> |> pit {:ok, _} do
+      ...>   "Yeah"
+      ...> else
+      ...>   "Noup"
+      ...> end
+      "Noup"
   """
   defmacro pit(pipe, expr, options \\ []) do
     options = else_fallback_option(options)
@@ -132,17 +155,17 @@ defmodule Pit do
   end
 
   defp else_fallback_option(options) do
-    if Keyword.has_key?(options, :else) || Keyword.has_key?(options, :else_value) do
+    if Keyword.has_key?(options, :else) || Keyword.has_key?(options, :else_pipe) do
       options
     else
-      Keyword.put(options, :else, :it)
+      Keyword.put(options, :else_pipe, :it)
     end
   end
 
   defp pit_pipe(piped, expr, options) do
     options = [
-      do: do_pipe(Keyword.take(options, [:do, :do_value])),
-      else: else_pipe(expr, Keyword.take(options, [:else, :else_value]))
+      do: do_pipe(Keyword.take(options, [:do, :do_pipe])),
+      else: else_pipe(expr, Keyword.take(options, [:else, :else_pipe]))
     ]
     quote do
       unquote(piped) |> unquote(pit_fn(expr, options)).()
@@ -193,14 +216,9 @@ defmodule Pit do
     end
   end
 
-  defp do_pipe(do: :it), do: do_pipe([])
-  defp do_pipe(do: body = {:__block__, _, _}) do
-    quote do
-      (fn _ -> unquote(body) end).()
-    end
-  end
-  defp do_pipe(do: pipe), do: pipe
-  defp do_pipe(do_value: expr) do
+  defp do_pipe(do_pipe: :it), do: do_pipe([])
+  defp do_pipe(do_pipe: pipe), do: pipe
+  defp do_pipe(do: expr) do
     quote do
       (fn _ -> unquote(expr) end).()
     end
@@ -211,18 +229,13 @@ defmodule Pit do
     end
   end
 
-  defp else_pipe(_expr, else: :it) do
+  defp else_pipe(_expr, else_pipe: :it) do
     quote do
       (fn it -> it end).()
     end
   end
-  defp else_pipe(_expr, body = {:__block__, _, _}) do
-    quote do
-      (fn _ -> unquote(body) end).()
-    end
-  end
-  defp else_pipe(_expr, else: pipe), do: pipe
-  defp else_pipe(_expr, else_value: expr) do
+  defp else_pipe(_expr, else_pipe: pipe), do: pipe
+  defp else_pipe(_expr, else: expr) do
     quote do
       (fn _ -> unquote(expr) end).()
     end
