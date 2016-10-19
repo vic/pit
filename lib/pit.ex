@@ -11,35 +11,65 @@ defmodule Pit do
 
   The syntax for transforming values is `expression |> pit(value <- pattern)`.
 
+  By default if a value does not match the pattern, `pit` simply passes down
+  the value it was given. You can however enforce the pattern
+  to match by using `pit!` which will raise an error on mismatch. Or you
+  can provide an `else:` option to `pit` to handle the mismatch yourself.
+
+  See the following examples:
+
   ## Examples
+
+      iex> # this example transforms an ok tuple
+      iex> import Pit
+      ...> value = {:ok, 11}
+      ...> value
+      ...>   |> pit(n * 2 <- {:ok, n})
+      22
+
+
+      iex> # If the value does not match, no transformation is made.
+      iex> import Pit
+      ...> value = {:ok, :hi}
+      ...> value
+      ...>   |> pit(n * 2 <- {:ok, n} when is_number(n))
+      {:ok, :hi}
+
+
+      iex> # You can force the pattern to match by using `pit!`
+      iex> import Pit
+      ...> value = {:ok, :hi}
+      ...> value
+      ...>   |> pit!(n * 2 <- {:ok, n} when is_number(n))
+      ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when is_number(n)` but got `{:ok, :hi}`
+
 
       iex> # The following will ensure there are no errors on
       iex> # the response and double the count value from data.
       iex> import Pit
       ...> response = {:ok, %{data: %{"count" => 10}, errors: []}}
       ...> response
-      ...>    |> pit(data <- {:ok, %{errors: [], data: data}})
+      ...>    |> pit!(data <- {:ok, %{errors: [], data: data}})
       ...>    |> pit(count * 2 <- %{"count" => count})
       20
 
 
-      iex> # By using the ! operator, you can pipe values
-      iex> # only if they dont match some pattern
-      iex> # This example only pipes anything that aint an error
+      iex> # The pattern can be negated with `not` or `!`.
+      iex> # in this case raise if an error tuple is found.
       iex> import Pit
       ...> response = {:cool, 22}
       ...> response
-      ...>    |> pit(! {:error, _})
+      ...>    |> pit!(not {:error, _})
       ...>    |> pit(n <- {_, n})
       22
 
 
-      iex> # if the piped value does not match an error is raised.
+      iex> # should raise when using `pit!`
       iex> import Pit
       ...> response = {:error, :not_found}
       ...> response
-      ...>    |> pit(! {:error, _})
-      ...>    |> pit(n <- {:ok, n})
+      ...>    |> pit!(not {:error, _})
+      ...>    |> pit(n <- {_, n})
       ** (Pit.PipedValueMismatch) did not expect piped value to match `{:error, _}` but got `{:error, :not_found}`
 
 
@@ -47,7 +77,7 @@ defmodule Pit do
       iex> import Pit
       ...> response = {:ok, 22}
       ...> response
-      ...>    |> pit({:ok, n} when n > 30)
+      ...>    |> pit!({:ok, n} when n > 30)
       ...>    |> pit(n <- {:ok, n})
       ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30` but got `{:ok, 22}`
 
@@ -92,12 +122,31 @@ defmodule Pit do
       4.0
 
 
+      iex> # The do form can take a block using bound variables.
+      iex> import Pit
+      ...> {:error, :none} |> pit({:ok, _})
+      {:error, :none}
+
+
   """
   defmacro pit(pipe, expr, options \\ []) do
+    options = else_fallback_option(options)
     pit_pipe(pipe, expr, options)
   end
 
-  def pit_pipe(piped, expr, options) do
+  defmacro pit!(pipe, expr, options \\ []) do
+    pit_pipe(pipe, expr, options)
+  end
+
+  defp else_fallback_option(options) do
+    if Keyword.has_key?(options, :else) || Keyword.has_key?(options, :else_value) do
+      options
+    else
+      Keyword.put(options, :else, :it)
+    end
+  end
+
+  defp pit_pipe(piped, expr, options) do
     options = [
       do: do_pipe(Keyword.take(options, [:do, :do_value])),
       else: else_pipe(expr, Keyword.take(options, [:else, :else_value]))
@@ -131,7 +180,7 @@ defmodule Pit do
     end
   end
 
-  defp pit_branches(it, {:!, _, [pattern]}, [do: do_pipe, else: else_pipe]) do
+  defp pit_branches(it, {nop, _, [pattern]}, [do: do_pipe, else: else_pipe]) when nop == :! or nop == :not do
     quote do
       unquote(pattern) -> unquote(it) |> unquote(else_pipe)
       _ -> unquote(it) |> unquote(do_pipe)
@@ -188,7 +237,7 @@ defmodule Pit do
   defp else_pipe({:<-, _, [_, pattern]}, []) do
     mismatch({"expected piped value to match", pattern})
   end
-  defp else_pipe({:!, _, [pattern]}, []) do
+  defp else_pipe({nop, _, [pattern]}, []) when nop == :! or nop == :not do
     mismatch({"did not expect piped value to match", pattern})
   end
   defp else_pipe(pattern, []) do
