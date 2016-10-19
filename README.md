@@ -135,10 +135,4 @@ iex> import Pit
 ...> end)
 4.0
 
-
-iex> # The do form can take a block using bound variables.
-iex> import Pit
-...> {:error, :none} |> pit({:ok, _})
-{:error, :none}
-
 ```

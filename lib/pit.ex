@@ -121,13 +121,6 @@ defmodule Pit do
       ...> end)
       4.0
 
-
-      iex> # The do form can take a block using bound variables.
-      iex> import Pit
-      ...> {:error, :none} |> pit({:ok, _})
-      {:error, :none}
-
-
   """
   defmacro pit(pipe, expr, options \\ []) do
     options = else_fallback_option(options)
