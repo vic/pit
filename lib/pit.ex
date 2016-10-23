@@ -44,6 +44,17 @@ defmodule Pit do
       ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when is_number(n)` but got `{:ok, :hi}`
 
 
+      iex> # If you use `pit!/1` at the final of your pipe, it will
+      iex> # extract the value that caused the mismatch.
+      iex> import Pit
+      ...> value = {:error, 11}
+      ...> value
+      ...>   |> pit!(n * 2 <- {:ok, n})   # raises Pit.PipedValueMismatch
+      ...>   |> fn x -> inspect(x) end.() # never gets executed
+      ...>   |> pit!                      # unwraps value from PipedValueMismatch
+      {:error, 11}
+
+
       iex> # The following will ensure there are no errors on
       iex> # the response and double the count value from data.
       iex> import Pit
@@ -152,6 +163,15 @@ defmodule Pit do
 
   defmacro pit!(pipe, expr, options \\ []) do
     pit_pipe(pipe, expr, options)
+  end
+
+  defmacro pit!(code) do
+    quote do
+      try do
+        unquote(code)
+      rescue x in [PipedValueMismatch] -> x.value
+      end
+    end
   end
 
   defp else_fallback_option(options) do
