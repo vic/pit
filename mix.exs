@@ -3,7 +3,7 @@ defmodule Pit.Mixfile do
 
   def project do
     [app: :pit,
-     version: "1.0.1",
+     version: "1.1.0",
      elixir: "~> 1.3",
      description: description,
      package: package,

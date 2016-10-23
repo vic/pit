@@ -11,7 +11,7 @@
 
     ```elixir
     def deps do
-      [{:pit, "~> 1.0.1"}]
+      [{:pit, "~> 1.1.0"}]
     end
     ```
 
@@ -30,6 +30,7 @@ can provide an `else:` option to `pit` to handle the mismatch yourself.
 See the following examples:
 
 ## Examples
+
 
 ```elixir
 
@@ -93,6 +94,39 @@ iex> import Pit
 ...>    |> pit!({:ok, n} when n > 30)
 ...>    |> pit(n <- {:ok, n})
 ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30` but got `{:ok, 22}`
+
+
+iex> # If you use `pit!/1` at the final of your pipe, it will
+iex> # extract the value that caused the mismatch.
+iex> import Pit
+...> value = {:error, 11}
+...> value
+...>   |> pit!({:ok, _})  # raises Pit.PipedValueMismatch
+...>   |> Yeah.got_it     # never gets executed
+...>   |> pit!            # rescue value from PipedValueMismatch
+{:error, 11}
+
+
+iex> # The `tag:` option takes lets you create a tagged tuple.
+iex> # Tagging mismatch values can be useful for example to know which
+iex> # pipe stage was the one that failed.
+iex> import Pit
+...> user = nil # ie. Repo.get_by User, email: "nick@cage.face"
+...> user
+...>   |> pit!(not nil, tag: :user) # raises Pit.PipedValueMismatch
+...>   |> User.avatar_url           # never gets executed
+...>   |> pit!                      # unwraps value from PipedValueMismatch
+{:user, nil}
+
+
+iex> # Tags also apply on matching patterns.
+iex> # Tagging mismatch values can be useful for example to know which
+iex> # pipe stage was the one that failed.
+iex> import Pit
+...> user = {:ok, 21} # ie. Universe.so_so_answer
+...> user
+...>   |> pit!(x * 2 <- {:ok, x}, tag: :answer)
+{:answer, 42}
 
 
 iex> # You can provide a default value in case of mismatch

@@ -44,17 +44,6 @@ defmodule Pit do
       ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when is_number(n)` but got `{:ok, :hi}`
 
 
-      iex> # If you use `pit!/1` at the final of your pipe, it will
-      iex> # extract the value that caused the mismatch.
-      iex> import Pit
-      ...> value = {:error, 11}
-      ...> value
-      ...>   |> pit!(n * 2 <- {:ok, n})   # raises Pit.PipedValueMismatch
-      ...>   |> fn x -> inspect(x) end.() # never gets executed
-      ...>   |> pit!                      # unwraps value from PipedValueMismatch
-      {:error, 11}
-
-
       iex> # The following will ensure there are no errors on
       iex> # the response and double the count value from data.
       iex> import Pit
@@ -91,6 +80,39 @@ defmodule Pit do
       ...>    |> pit!({:ok, n} when n > 30)
       ...>    |> pit(n <- {:ok, n})
       ** (Pit.PipedValueMismatch) expected piped value to match `{:ok, n} when n > 30` but got `{:ok, 22}`
+
+
+      iex> # If you use `pit!/1` at the final of your pipe, it will
+      iex> # extract the value that caused the mismatch.
+      iex> import Pit
+      ...> value = {:error, 11}
+      ...> value
+      ...>   |> pit!({:ok, _})  # raises Pit.PipedValueMismatch
+      ...>   |> Yeah.got_it     # never gets executed
+      ...>   |> pit!            # rescue value from PipedValueMismatch
+      {:error, 11}
+
+
+      iex> # The `tag:` option takes lets you create a tagged tuple.
+      iex> # Tagging mismatch values can be useful for example to know which
+      iex> # pipe stage was the one that failed.
+      iex> import Pit
+      ...> user = nil # ie. Repo.get_by User, email: "nick@cage.face"
+      ...> user
+      ...>   |> pit!(not nil, tag: :user) # raises Pit.PipedValueMismatch
+      ...>   |> User.avatar_url           # never gets executed
+      ...>   |> pit!                      # unwraps value from PipedValueMismatch
+      {:user, nil}
+
+
+      iex> # Tags also apply on matching patterns.
+      iex> # Tagging mismatch values can be useful for example to know which
+      iex> # pipe stage was the one that failed.
+      iex> import Pit
+      ...> user = {:ok, 21} # ie. Universe.so_so_answer
+      ...> user
+      ...>   |> pit!(x * 2 <- {:ok, x}, tag: :answer)
+      {:answer, 42}
 
 
       iex> # You can provide a default value in case of mismatch
@@ -183,12 +205,13 @@ defmodule Pit do
   end
 
   defp pit_pipe(piped, expr, options) do
-    options = [
-      do: do_pipe(Keyword.take(options, [:do, :do_pipe])),
-      else: else_pipe(expr, Keyword.take(options, [:else, :else_pipe]))
+    tag = Keyword.get(options, :tag)
+    do_else = [
+      do: tagged(tag, do_pipe(Keyword.take(options, [:do, :do_pipe]))),
+      else: tagged(tag, else_pipe(expr, Keyword.take(options, [:else, :else_pipe])))
     ]
     quote do
-      unquote(piped) |> unquote(pit_fn(expr, options)).()
+      unquote(piped) |> unquote(pit_fn(expr, do_else)).()
     end
   end
 
@@ -233,6 +256,13 @@ defmodule Pit do
     quote do
       unquote(pattern) -> unquote(it) |> unquote(do_pipe)
       _ -> unquote(it) |> unquote(else_pipe)
+    end
+  end
+
+  defp tagged(_tag = nil, piped_fn), do: piped_fn
+  defp tagged(tag, piped_fn) do
+    quote do
+      (fn it -> {unquote(tag), it} end).() |> unquote(piped_fn)
     end
   end
 
