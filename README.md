@@ -39,14 +39,14 @@ iex> import Pit
 ...>   |> pit(ok: String.length)
 5
 
-iex> # does not pipe if tagged tuple does match
+iex> # does not pipe if tagged tuple does not match
 iex> import Pit
 ...> {:error, "hello"}
 ...>   |> pit(ok: String.length)
 {:error, "hello"}
 
 
-iex> # does not pipe if tagged tuple does match
+iex> # pit! raises on tagged tuple mismatch
 iex> import Pit
 ...> {:error, "hello"}
 ...>   |> pit!(ok: String.length, yes: String.length)
