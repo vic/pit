@@ -4,7 +4,7 @@ defmodule Pit do
     defexception [:message, :pattern, :value]
   end
 
-  @doc ~S"""
+  @moduledoc ~S"""
 
   The `pit` macro lets you pipe value transformations by pattern matching
   on data as it is passed down the pipe.
@@ -19,6 +19,26 @@ defmodule Pit do
   See the following examples:
 
   ## Examples
+
+      iex> # Pipe a value if a tagged tuple matches
+      iex> import Pit
+      ...> {:ok, "hello"}
+      ...>   |> pit(ok: String.length)
+      5
+
+      iex> # does not pipe if tagged tuple does match
+      iex> import Pit
+      ...> {:error, "hello"}
+      ...>   |> pit(ok: String.length)
+      {:error, "hello"}
+
+
+      iex> # does not pipe if tagged tuple does match
+      iex> import Pit
+      ...> {:error, "hello"}
+      ...>   |> pit!(ok: String.length, yes: String.length)
+      ** (Pit.PipedValueMismatch) expected piped value to be a tagged tuple with one of keys `[:ok, :yes]` but got `{:error, "hello"}`
+
 
       iex> # this example transforms an ok tuple
       iex> import Pit
@@ -93,7 +113,7 @@ defmodule Pit do
       {:error, 11}
 
 
-      iex> # The `tag:` option takes lets you create a tagged tuple.
+      iex> # The `tag:` option lets you create a tagged tuple.
       iex> # Tagging mismatch values can be useful for example to know which
       iex> # pipe stage was the one that failed.
       iex> import Pit
@@ -106,8 +126,6 @@ defmodule Pit do
 
 
       iex> # Tags also apply on matching patterns.
-      iex> # Tagging mismatch values can be useful for example to know which
-      iex> # pipe stage was the one that failed.
       iex> import Pit
       ...> user = {:ok, 21} # ie. Universe.so_so_answer
       ...> user
@@ -178,13 +196,33 @@ defmodule Pit do
       ...> end
       "Noup"
   """
-  defmacro pit(pipe, expr, options \\ []) do
-    options = else_fallback_option(options)
+
+  defmacro pit(pipe, expr, options) do
+    pit_pipe(pipe, expr, else_it(options))
+  end
+
+  defmacro pit(pipe, options) do
+    if Keyword.keyword?(options) do
+      quote do
+        unquote(pipe) |> unquote(pit_tagged_fn(options, true)).()
+      end
+    else
+      pit_pipe(pipe, options, else_it([]))
+    end
+  end
+
+  defmacro pit!(pipe, expr, options) do
     pit_pipe(pipe, expr, options)
   end
 
-  defmacro pit!(pipe, expr, options \\ []) do
-    pit_pipe(pipe, expr, options)
+  defmacro pit!(pipe, options) do
+    if Keyword.keyword?(options) do
+      quote do
+        unquote(pipe) |> unquote(pit_tagged_fn(options, false)).()
+      end
+    else
+      pit_pipe(pipe, options, [])
+    end
   end
 
   defmacro pit!(code) do
@@ -196,12 +234,28 @@ defmodule Pit do
     end
   end
 
-  defp else_fallback_option(options) do
+  defp else_it(options) do
     if Keyword.has_key?(options, :else) || Keyword.has_key?(options, :else_pipe) do
       options
     else
       Keyword.put(options, :else_pipe, :it)
     end
+  end
+
+  defp pit_tagged_fn_clauses(tagged_pipes, else_it) do
+    it = Macro.var(:it, __MODULE__)
+    clauses = for {tag, pipe} <- tagged_pipes do
+      expr = quote(do: unquote(it) |> unquote(pipe))
+      {:->, [], [[{tag, it}], expr]}
+    end
+    fallback = if else_it,
+      do: {:->, [], [[it], it]},
+      else: {:->, [], [[it], quote(do: unquote(it) |> unquote(mismatch({"expected piped value to be a tagged tuple with one of keys", Keyword.keys(tagged_pipes)})))]}
+    clauses ++ [fallback]
+  end
+
+  defp pit_tagged_fn(tagged_pipes, else_it) do
+    {:fn, [], pit_tagged_fn_clauses(tagged_pipes, else_it)}
   end
 
   defp pit_pipe(piped, expr, options) do

@@ -11,7 +11,7 @@
 
     ```elixir
     def deps do
-      [{:pit, "~> 1.1.0"}]
+      [{:pit, "~> 1.2.0"}]
     end
     ```
 
@@ -31,8 +31,27 @@ See the following examples:
 
 ## Examples
 
-
 ```elixir
+
+iex> # Pipe a value if a tagged tuple matches
+iex> import Pit
+...> {:ok, "hello"}
+...>   |> pit(ok: String.length)
+5
+
+iex> # does not pipe if tagged tuple does match
+iex> import Pit
+...> {:error, "hello"}
+...>   |> pit(ok: String.length)
+{:error, "hello"}
+
+
+iex> # does not pipe if tagged tuple does match
+iex> import Pit
+...> {:error, "hello"}
+...>   |> pit!(ok: String.length, yes: String.length)
+** (Pit.PipedValueMismatch) expected piped value to be a tagged tuple with one of keys `[:ok, :yes]` but got `{:error, "hello"}`
+
 
 iex> # this example transforms an ok tuple
 iex> import Pit
@@ -107,7 +126,7 @@ iex> import Pit
 {:error, 11}
 
 
-iex> # The `tag:` option takes lets you create a tagged tuple.
+iex> # The `tag:` option lets you create a tagged tuple.
 iex> # Tagging mismatch values can be useful for example to know which
 iex> # pipe stage was the one that failed.
 iex> import Pit
@@ -120,8 +139,6 @@ iex> import Pit
 
 
 iex> # Tags also apply on matching patterns.
-iex> # Tagging mismatch values can be useful for example to know which
-iex> # pipe stage was the one that failed.
 iex> import Pit
 ...> user = {:ok, 21} # ie. Universe.so_so_answer
 ...> user
@@ -191,5 +208,4 @@ iex> import Pit
 ...>   "Noup"
 ...> end
 "Noup"
-
 ```
