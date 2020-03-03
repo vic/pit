@@ -10,11 +10,11 @@
 
   1. Add `pit` to your list of dependencies in `mix.exs`:
 
-    ```elixir
-    def deps do
-      [{:pit, "~> 1.2.0"}]
-    end
-    ```
+```elixir
+  def deps do
+    [{:pit, "~> 1.2.0"}]
+  end
+```
 
 ## Usage
 
