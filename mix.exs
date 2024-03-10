@@ -3,10 +3,10 @@ defmodule Pit.Mixfile do
 
   def project do
     [app: :pit,
-     version: "1.2.0",
+     version: "1.2.1",
      elixir: "~> 1.3",
-     description: description,
-     package: package,
+     description: description(),
+     package: package(),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps()]
